@@ -17,7 +17,7 @@ const bot = require('./lib/bot')
 const { sms, downloadMediaMessage } = require('./lib/msg');
 const axios = require("axios"); // Required for sendFileUrl
 const { sendTranslations } = require('./lib/status');
-const ownerNumber = ["94701515609"]; // ✅ Dummy owner numbers
+const ownerNumber = ["94766863255"]; // ✅ Dummy owner numbers
 
 const getBuffer = async (url) => (await axios.get(url, { responseType: "arraybuffer" })).data;
 const getGroupAdmins = (participants) => participants.filter(p => p.admin).map(p => p.id);
@@ -172,7 +172,7 @@ const reply = (teks) => {
 conn.sendMessage(from, { text: teks }, { quoted: mek });
 }
 const isCreator = (senderNumber) => {
-  const creatorNumber = '94701515609';
+  const creatorNumber = '94766863255';
   return senderNumber === creatorNumber || isMe(senderNumber);
 }
     
