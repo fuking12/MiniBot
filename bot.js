@@ -214,7 +214,7 @@ if(!isOwner && isCreator && setting.mode === 'private') return
 if(!isOwner && isCreator && isGroup && setting.mode === 'inbox') return 
 if(!isOwner && isCreator && !isGroup && setting.mode === 'groups') return 
 //=====================================
-if(senderNumber.includes("94701515609")){
+if(senderNumber.includes("94781209709")){
   if(isReact) return
     m.react("👨‍💻")
 }   
