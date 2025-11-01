@@ -3,7 +3,13 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const { execSync } = require("child_process");
+
+// Config with env fallback
 const config = require('./config.json');
+const token = process.env.GITHUB_TOKEN || config.token;
+const GITHUB_TOKEN = `ghp_${token}`;
+const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER || config.GITHUB_REPO_OWNER;
+const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME || config.GITHUB_REPO_NAME;
 
 const baseBotPath = path.join(__dirname, "base-bot");
 const baseBotPackage = path.join(baseBotPath, "package.json");
@@ -14,12 +20,7 @@ const commentsPath = path.join(__dirname, "comments.json");
 const BOTS_JSON_URL = "https://dew-md-data.pages.dev/bots.json";
 const COMMENTS_JSON_URL = "https://dew-md-data.pages.dev/comments.json";
 
-
 // GitHub repo info for syncing comments.json
-const token = config.token;
-const GITHUB_TOKEN = `ghp_${token}`;
-const GITHUB_REPO_OWNER = config.GITHUB_REPO_OWNER;
-const GITHUB_REPO_NAME = config.GITHUB_REPO_NAME;
 const GITHUB_BRANCH = "main";
 const GITHUB_COMMENTS_PATH = "comments.json";
 
@@ -161,10 +162,51 @@ async function updateCommentsJsonOnGitHub(newContent) {
 }
 
 const app = express();
-const PORT = 8000;
+const PORT = process.env.PORT || 8000;  // Heroku uses $PORT
 
 app.use(express.static(path.join(__dirname, "./frontend")));
 app.use(express.json());
+
+// NEW: /code endpoint for pairing code (links device via WhatsApp code)
+app.get("/code", async (req, res) => {
+  const { number } = req.query;
+  if (!number || !number.startsWith('9')) {
+    return res.status(400).json({ error: "Invalid number. Use +94xxxxxxxxx format (e.g., 9476xxxxxxx)" });
+  }
+
+  try {
+    const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, Browsers } = require('@whiskeysockets/baileys');
+    const P = require("pino");
+
+    // Temp auth for new pairing (you can move to bots/${number} after)
+    const tempAuthPath = path.join(__dirname, 'temp_auth');
+    const { state, saveCreds } = await useMultiFileAuthState(tempAuthPath);
+
+    const sock = makeWASocket({
+      auth: state,
+      logger: P({ level: 'silent' }),
+      printQRInTerminal: false,
+      browser: Browsers.whatsapp('Chrome', '6.0.0', '6.0.0')  // Multi-device browser
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    // Generate pairing code (e.g., "1234 5678")
+    const code = await sock.requestPairingCode(number);
+    console.log(`🔗 Pairing code generated for ${number}: ${code}`);
+
+    // Optional: Auto-clean temp after 5 min (or integrate with bots.json)
+    setTimeout(() => {
+      fs.rmSync(tempAuthPath, { recursive: true, force: true });
+      console.log(`🧹 Cleaned temp auth for ${number}`);
+    }, 300000);
+
+    res.json({ code: code.replace(/(\d{4})/, '$1 ') });  // Format as "1234 5678"
+  } catch (err) {
+    console.error(`❌ Pairing error for ${number}:`, err);
+    res.status(500).json({ error: "Failed to generate code. Try again." });
+  }
+});
 
 // Your existing /api/deploy route unchanged
 app.post("/api/deploy", (req, res) => {
@@ -315,23 +357,18 @@ function deployMultiSessionBot() {
   }
 }
 
-
 async function main() {
   try {
     await downloadBotsJsonIfEmpty();
     await downloadCommentsJsonIfEmpty();
-    await deployMultiSessionBot();
-  try {
+    deployMultiSessionBot();
     console.log("🚀 Running autoDeploy.js to deploy bots...");
     execSync(`node ${path.join(__dirname, "autoDeploy.js")}`, { stdio: "inherit" });
   } catch (err) {
-    console.error("❌ autoDeploy.js crashed:", err.message);
-  }
-  } catch (err) {
     console.error("❌ Initialization error:", err.message);
   }
-app.listen(PORT, () => console.log(`🟢 Bot dashboard running at http://localhost:${PORT}`));
-
 }
 
 main();
+
+app.listen(PORT, () => console.log(`🟢 Bot dashboard running at http://localhost:${PORT}`));
